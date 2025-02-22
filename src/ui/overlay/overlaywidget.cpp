@@ -492,6 +492,15 @@ void OverlayWidget::handleToolChanged(EditBar::Tool tool)
         case EditBar::Text:
             m_currentTool = CaptureManager::AnnotationType::Text;
             break;
+        case EditBar::Pin:
+            // 触发贴图功能
+            if (QRect currentRect = QRect(m_startPos, m_endPos).normalized(); 
+                currentRect.isValid()) {
+                QPixmap screenshot = m_captureManager->captureScreen();
+                QPixmap croppedShot = screenshot.copy(currentRect);
+                emit createFloatWindow(croppedShot);  // 发送信号
+            }
+            break;
         default:
             m_currentTool = CaptureManager::AnnotationType::Rectangle;
             break;

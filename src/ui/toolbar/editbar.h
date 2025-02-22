@@ -14,6 +14,7 @@ public:
         Rectangle,   // 矩形标注
         Arrow,      // 箭头标注
         Text,       // 文字标注
+        Pin  // 添加贴图工具
     };
     Q_ENUM(Tool)
 

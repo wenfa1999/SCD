@@ -9,6 +9,13 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <Windows.h> // Windows平台
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QAction>
+#include <QDir>
+#include <QStyle>
+#include "../ui/floatimage/floatwindow.h"  // 使用相对路径
+#include <QIcon>
 
 // 初始化静态成员
 HHOOK MainWindow::keyboardHook = nullptr;
@@ -39,6 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(centralWidget);
     
     setupHotkeys();
+    setupTrayIcon();
     
     // 修改connect的使用方式，使用.data()获取原始指针
     connect(m_overlay.data(), &OverlayWidget::areaSelected, this, [this](const QRect &rect) {
@@ -50,6 +58,10 @@ MainWindow::MainWindow(QWidget *parent)
     // 连接截图完成信号
     connect(m_overlay.data(), &OverlayWidget::captureFinished, 
             this, &MainWindow::onCaptureFinished);
+    
+    // 连接贴图信号
+    connect(m_overlay.data(), &OverlayWidget::createFloatWindow,
+            this, &MainWindow::createFloatWindow);
 }
 
 MainWindow::~MainWindow()
@@ -113,4 +125,70 @@ void MainWindow::onCaptureFinished()
 {
     m_captureManager->clearResources();
     show();
+}
+
+void MainWindow::setupTrayIcon()
+{
+    m_trayIcon = new QSystemTrayIcon(this);
+    // 使用资源文件中的图标
+    m_trayIcon->setIcon(QIcon(":/icons/app.ico"));
+    m_trayIcon->setToolTip("截图工具");
+    
+    createTrayMenu();
+    m_trayIcon->setContextMenu(m_trayMenu);
+    
+    connect(m_trayIcon, &QSystemTrayIcon::activated, 
+            this, &MainWindow::handleTrayActivated);
+            
+    m_trayIcon->show();
+}
+
+void MainWindow::createTrayMenu()
+{
+    m_trayMenu = new QMenu(this);
+    
+    QAction* captureAction = new QAction("截图", this);
+    connect(captureAction, &QAction::triggered, this, &MainWindow::startCapture);
+    
+    QAction* showAction = new QAction("显示主窗口", this);
+    connect(showAction, &QAction::triggered, this, &MainWindow::show);
+    
+    QAction* quitAction = new QAction("退出", this);
+    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+    
+    m_trayMenu->addAction(captureAction);
+    m_trayMenu->addAction(showAction);
+    m_trayMenu->addSeparator();
+    m_trayMenu->addAction(quitAction);
+}
+
+void MainWindow::handleTrayActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    if (reason == QSystemTrayIcon::Trigger) {
+        startCapture();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (m_trayIcon->isVisible()) {
+        hide();
+        event->ignore();
+    }
+}
+
+void MainWindow::createFloatWindow(const QPixmap& pixmap)
+{
+    FloatWindow* floatWin = new FloatWindow(pixmap);
+    
+    // 当窗口关闭时自动删除
+    floatWin->setAttribute(Qt::WA_DeleteOnClose);
+    
+    // 连接关闭信号以从列表中移除
+    connect(floatWin, &FloatWindow::destroyed, this, [this, floatWin]() {
+        m_floatWindows.removeOne(floatWin);
+    });
+    
+    m_floatWindows.append(floatWin);
+    floatWin->show();
 }

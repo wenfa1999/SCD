@@ -58,6 +58,7 @@ private:
 signals:
     void areaSelected(const QRect &rect);
     void captureFinished();
+    void createFloatWindow(const QPixmap& pixmap);
 };
 
 #endif // OVERLAYWIDGET_H 

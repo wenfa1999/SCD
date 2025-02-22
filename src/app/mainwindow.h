@@ -8,6 +8,9 @@
 #include <Windows.h>
 #include "../core/capture/capturemanager.h"
 #include "../ui/overlay/overlaywidget.h"
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include "../ui/floatimage/floatwindow.h"
 
 class MainWindow : public QMainWindow
 {
@@ -17,10 +20,14 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void startCapture();
     void handleCapture(const QPixmap &pixmap);
     void onCaptureFinished();
+    void createFloatWindow(const QPixmap& pixmap);
 
 private:
     // 使用智能指针管理资源
@@ -32,6 +39,15 @@ private:
     static HHOOK keyboardHook;
     static MainWindow* instance;
     static LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+    QSystemTrayIcon* m_trayIcon;
+    QMenu* m_trayMenu;
+    
+    void setupTrayIcon();
+    void createTrayMenu();
+    void handleTrayActivated(QSystemTrayIcon::ActivationReason reason);
+
+    QList<FloatWindow*> m_floatWindows;  // 管理所有贴图窗口
 };
 
 #endif // MAINWINDOW_H 

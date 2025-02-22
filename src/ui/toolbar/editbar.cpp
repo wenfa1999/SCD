@@ -39,37 +39,32 @@ void EditBar::setupUI()
     layout->setSpacing(2);
     layout->setContentsMargins(4, 4, 4, 4);
     
-    // 使用 Qt 标准图标
-    auto rectBtn = createToolButton("", "矩形标注", Rectangle);
-    rectBtn->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));  // 临时图标
+    // 矩形工具
+    layout->addWidget(createToolButton(":/icons/rect.png", "矩形标注", Rectangle));
     
-    auto arrowBtn = createToolButton("", "箭头标注", Arrow);
-    arrowBtn->setIcon(style()->standardIcon(QStyle::SP_ArrowRight));
+    // 箭头工具
+    layout->addWidget(createToolButton(":/icons/arrow.png", "箭头标注", Arrow));
     
-    auto textBtn = createToolButton("", "文字标注", Text);
-    textBtn->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
+    // 文字工具
+    layout->addWidget(createToolButton(":/icons/text.png", "文字标注", Text));
+    
+    // 贴图工具
+    layout->addWidget(createToolButton(":/icons/pin.png", "贴图", Pin));
     
     // 添加分隔线
-    QFrame *line = new QFrame(this);
+    QFrame* line = new QFrame(this);
     line->setFrameShape(QFrame::VLine);
     line->setFrameShadow(QFrame::Sunken);
-    line->setStyleSheet("background-color: #3D3D3D;");
-    
-    // 确认和取消按钮使用标准图标
-    auto confirmBtn = createToolButton("", "确认", None);
-    confirmBtn->setIcon(style()->standardIcon(QStyle::SP_DialogApplyButton));
-    
-    auto cancelBtn = createToolButton("", "取消", None);
-    cancelBtn->setIcon(style()->standardIcon(QStyle::SP_DialogCancelButton));
-    
-    connect(confirmBtn, &QToolButton::clicked, this, &EditBar::confirmClicked);
-    connect(cancelBtn, &QToolButton::clicked, this, &EditBar::cancelClicked);
-    
-    layout->addWidget(rectBtn);
-    layout->addWidget(arrowBtn);
-    layout->addWidget(textBtn);
     layout->addWidget(line);
+    
+    // 确认按钮
+    QToolButton* confirmBtn = createToolButton(":/icons/confirm.png", "确认", None);
+    connect(confirmBtn, &QToolButton::clicked, this, &EditBar::confirmClicked);
     layout->addWidget(confirmBtn);
+    
+    // 取消按钮
+    QToolButton* cancelBtn = createToolButton(":/icons/cancel.png", "取消", None);
+    connect(cancelBtn, &QToolButton::clicked, this, &EditBar::cancelClicked);
     layout->addWidget(cancelBtn);
 }
 
