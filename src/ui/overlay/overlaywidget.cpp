@@ -7,14 +7,26 @@
 #include <QTimer>
 #include <QApplication>
 #include "../toolbar/editbar.h"
+#include "../../core/capture/capturemanager.h"
 
-OverlayWidget::OverlayWidget(QWidget *parent)
+// 在文件开头，类定义之前添加静态成员初始化
+QCursor* OverlayWidget::s_customCursor = nullptr;
+
+OverlayWidget::OverlayWidget(QWidget *parent, CaptureManager* manager)
     : QWidget(parent)
     , m_isDrawing(false)
     , m_isDragging(false)
     , m_dragStartPos(QPoint())
     , m_sizeLabel(new QLabel(this))
     , m_editBar(new EditBar(this))
+    , m_isAnnotating(false)
+    , m_annotationStart(QPoint())
+    , m_annotationEnd(QPoint())
+    , m_currentTool(CaptureManager::AnnotationType::Rectangle)
+    , m_currentColor(Qt::red)
+    , m_currentThickness(2)
+    , m_currentFilled(false)
+    , m_captureManager(manager)
 {
     // 添加调试输出
     qDebug() << "OverlayWidget created";
@@ -172,48 +184,61 @@ void OverlayWidget::takeScreenshot()
         totalRect = totalRect.united(screen->geometry());
     }
     
-    // 创建一个空白的全屏截图
-    m_screenSnapshot = QPixmap(totalRect.size());
-    m_screenSnapshot.fill(Qt::transparent);  // 确保背景透明
+    // 创建一个完整的截图
+    QPixmap fullScreenshot(totalRect.size());
+    fullScreenshot.fill(Qt::transparent);
+    QPainter painter(&fullScreenshot);
     
-    // 截取每个屏幕并合并
-    QPainter painter(&m_screenSnapshot);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform);
-    
+    // 截取每个屏幕
     for (QScreen *screen : QGuiApplication::screens()) {
         QPixmap screenShot = screen->grabWindow(0);
         QRect screenRect = screen->geometry();
         painter.drawPixmap(screenRect.translated(-totalRect.topLeft()), screenShot);
     }
+    
+    m_screenSnapshot = fullScreenshot;
+    // 设置到 CaptureManager
+    m_captureManager->setOriginalPixmap(fullScreenshot);
 }
 
 void OverlayWidget::show()
 {
-    // 先隐藏主窗口，避免截到自己
+    // 先清理所有资源
+    m_screenSnapshot = QPixmap();
+    m_captureManager->clearResources();
+    
+    // 重置所有状态
+    m_isDrawing = false;
+    m_isDragging = false;
+    m_isAnnotating = false;
+    m_editBar->hide();
+    m_sizeLabel->hide();
+    m_startPos = QPoint(-1, -1);
+    m_endPos = QPoint(-1, -1);
+    
+    // 隐藏窗口
     hide();
     
-    // 短暂延迟以确保窗口完全隐藏
+    // 延迟执行新截图
     QTimer::singleShot(100, this, [this]() {
-        // 先截取全屏
+        // 截取新的全屏
         takeScreenshot();
-        
-        // 重置状态
-        m_isDrawing = false;
-        m_isDragging = false;
-        m_editBar->hide();
-        m_sizeLabel->hide();
-        m_startPos = QPoint(-1, -1);  // 使用无效点作为初始值
-        m_endPos = QPoint(-1, -1);    // 使用无效点作为初始值
         
         // 显示窗口
         QWidget::show();
         setWindowState(Qt::WindowActive);
         raise();
         activateWindow();
-        
-        // 设置焦点
         setFocus(Qt::ActiveWindowFocusReason);
     });
+}
+
+void OverlayWidget::hide()
+{
+    // 清理资源
+    m_screenSnapshot = QPixmap();
+    m_captureManager->clearResources();
+    QWidget::hide();
 }
 
 void OverlayWidget::paintEvent(QPaintEvent *event)
@@ -243,6 +268,42 @@ void OverlayWidget::paintEvent(QPaintEvent *event)
         // 如果没有选区，整个屏幕都是半透明的
         painter.fillRect(rect(), QColor(0, 0, 0, 128));
     }
+
+    // 绘制已保存的标注
+    if (!m_isDrawing && !m_isDragging) {
+        QRect selectedRect = QRect(m_startPos, m_endPos).normalized();
+        if (selectedRect.isValid()) {
+            // 获取并绘制带标注的图片
+            QPixmap editedPixmap = m_captureManager->getEditedPixmap();
+            if (!editedPixmap.isNull()) {
+                painter.drawPixmap(selectedRect, editedPixmap, selectedRect);
+            }
+        }
+    }
+
+    // 绘制正在创建的标注预览
+    if (m_isAnnotating) {
+        QPen pen(m_currentColor);
+        pen.setWidth(m_currentThickness);
+        painter.setPen(pen);
+        
+        QRect annotationRect = QRect(m_annotationStart, m_annotationEnd).normalized();
+        
+        switch (m_currentTool) {
+            case CaptureManager::AnnotationType::Rectangle:
+                if (m_currentFilled) {
+                    QColor fillColor = m_currentColor;
+                    fillColor.setAlpha(40);
+                    painter.setBrush(fillColor);
+                } else {
+                    painter.setBrush(Qt::NoBrush);
+                }
+                painter.drawRect(annotationRect);
+                break;
+                
+            // 其他工具类型将在后续添加
+        }
+    }
 }
 
 void OverlayWidget::mousePressEvent(QMouseEvent *event)
@@ -250,26 +311,45 @@ void OverlayWidget::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         QRect currentRect = QRect(m_startPos, m_endPos).normalized();
         
-        if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
-            && currentRect.contains(event->pos())) {
-            // 在选区内点击，开始拖动
+        if (!m_editBar->isVisible()) {
+            // 还没有选区，开始选区
+            m_isDrawing = true;
+            m_startPos = m_endPos = event->pos();
+            updateSizeInfo();
+        } else if (m_editBar->currentTool() != EditBar::None && !m_isAnnotating) {
+            // 工具栏可见且选择了工具，且不在标注状态时
+            if (currentRect.contains(event->pos())) {
+                startAnnotation(event->pos());
+            } else {
+                // 在选区外点击时，重置工具并开始新选区
+                m_editBar->resetTool();
+                m_isDrawing = true;
+                m_startPos = m_endPos = event->pos();
+                m_editBar->hide();
+                updateSizeInfo();
+            }
+        } else if (currentRect.contains(event->pos())) {
+            // 在选区内点击，且没有选择工具时，开始拖动
             m_isDragging = true;
             m_dragStartPos = event->pos();
             setCursor(Qt::ClosedHandCursor);
         } else {
-            // 在选区外点击，开始新选区
+            // 在选区外点击时开始新选区
             m_isDrawing = true;
             m_startPos = m_endPos = event->pos();
             m_editBar->hide();
+            updateSizeInfo();
         }
-        updateSizeInfo();
         update();
     }
 }
 
 void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
 {
-    if (m_isDrawing) {
+    if (m_isAnnotating && m_editBar->currentTool() != EditBar::None) {
+        // 只有在工具被选中时才更新标注
+        updateAnnotation(event->pos());
+    } else if (m_isDrawing) {
         // 正在绘制新选区
         m_endPos = event->pos();
         updateSizeInfo();
@@ -317,8 +397,9 @@ void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
         QRect currentRect = QRect(m_startPos, m_endPos).normalized();
         if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
             && currentRect.contains(event->pos())) {
-            // 如果选区等于屏幕大小，不显示手形光标
-            if (currentRect.size() == size()) {
+            if (m_editBar->currentTool() != EditBar::None) {
+                setCursor(Qt::CrossCursor);
+            } else if (currentRect.size() == size()) {
                 updateCursor(event->pos());
             } else {
                 setCursor(Qt::OpenHandCursor);
@@ -332,7 +413,9 @@ void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
 void OverlayWidget::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
-        if (m_isDrawing) {
+        if (m_isAnnotating) {
+            finishAnnotation();
+        } else if (m_isDrawing) {
             // 完成绘制新选区
             m_isDrawing = false;
             m_endPos = event->pos();
@@ -399,8 +482,20 @@ void OverlayWidget::updateEditBarPosition()
 
 void OverlayWidget::handleToolChanged(EditBar::Tool tool)
 {
-    // 这里先只打印日志，后续实现具体绘制功能
-    qDebug() << "Tool changed to:" << tool;
+    switch (tool) {
+        case EditBar::Rectangle:
+            m_currentTool = CaptureManager::AnnotationType::Rectangle;
+            break;
+        case EditBar::Arrow:
+            m_currentTool = CaptureManager::AnnotationType::Arrow;
+            break;
+        case EditBar::Text:
+            m_currentTool = CaptureManager::AnnotationType::Text;
+            break;
+        default:
+            m_currentTool = CaptureManager::AnnotationType::Rectangle;
+            break;
+    }
 }
 
 // 新增：更新鼠标样式的辅助函数
@@ -417,17 +512,21 @@ void OverlayWidget::updateCursor(const QPoint &pos)
         }
     }
     
-    // 检查是否在选区内 - 添加有效性检查
+    // 检查是否在选区内
     QRect currentRect = QRect(m_startPos, m_endPos).normalized();
     if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
         && currentRect.contains(pos)) {
-        setCursor(Qt::OpenHandCursor);
+        // 根据当前工具状态设置光标
+        if (m_editBar->currentTool() != EditBar::None) {
+            setCursor(Qt::CrossCursor);  // 绘制工具时使用十字光标
+        } else {
+            setCursor(Qt::OpenHandCursor);  // 无工具时使用手形光标
+        }
         return;
     }
     
     // 在其他区域显示自定义十字光标
-    static QCursor* customCross = nullptr;
-    if (!customCross) {
+    if (!s_customCursor) {
         QPixmap pixmap(32, 32);
         pixmap.fill(Qt::transparent);
         QPainter painter(&pixmap);
@@ -442,7 +541,55 @@ void OverlayWidget::updateCursor(const QPoint &pos)
         painter.drawLine(16, 0, 16, 32);
         painter.drawLine(0, 16, 32, 16);
         
-        customCross = new QCursor(pixmap, 16, 16);
+        s_customCursor = new QCursor(pixmap, 16, 16);
     }
-    setCursor(*customCross);
+    setCursor(*s_customCursor);
+}
+
+void OverlayWidget::startAnnotation(const QPoint& pos)
+{
+    m_isAnnotating = true;
+    m_annotationStart = m_annotationEnd = pos;
+}
+
+void OverlayWidget::updateAnnotation(const QPoint& pos)
+{
+    if (m_isAnnotating) {
+        m_annotationEnd = pos;
+        update();
+    }
+}
+
+void OverlayWidget::finishAnnotation()
+{
+    if (m_isAnnotating) {
+        QRect annotationRect = QRect(m_annotationStart, m_annotationEnd).normalized();
+        QRect selectedRect = QRect(m_startPos, m_endPos).normalized();
+        
+        if (selectedRect.contains(annotationRect)) {
+            // 只有当标注区域有效时才添加标注
+            if (annotationRect.width() > 0 && annotationRect.height() > 0) {
+                CaptureManager::Annotation annotation;
+                annotation.type = m_currentTool;
+                annotation.rect = annotationRect;
+                annotation.color = m_currentColor;
+                annotation.thickness = m_currentThickness;
+                annotation.filled = m_currentFilled;
+                
+                m_captureManager->addAnnotation(annotation);
+                // 直接更新背景截图
+                m_screenSnapshot = m_captureManager->getEditedPixmap();
+            }
+        }
+        
+        m_isAnnotating = false;
+        m_editBar->resetTool();
+        update();
+    }
+}
+
+OverlayWidget::~OverlayWidget()
+{
+    delete s_customCursor;
+    s_customCursor = nullptr;
 } 

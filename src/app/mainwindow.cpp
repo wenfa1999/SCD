@@ -17,7 +17,7 @@ MainWindow* MainWindow::instance = nullptr;
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_captureManager(new CaptureManager(this))
-    , m_overlay(new OverlayWidget(nullptr)) // 设置为nullptr使其成为顶级窗口
+    , m_overlay(new OverlayWidget(nullptr, m_captureManager.data())) // 传入 CaptureManager
 {
     // 添加这行，设置一个合适的初始大小
     resize(800, 600);
@@ -86,10 +86,13 @@ LRESULT CALLBACK MainWindow::KeyboardProc(int nCode, WPARAM wParam, LPARAM lPara
 
 void MainWindow::startCapture()
 {
+    // 先清理资源
+    m_captureManager->clearResources();
+    
     // 隐藏主窗口
     hide();
     
-    // 短暂延迟以确保窗口完全隐藏
+    // 延迟显示截图界面
     QTimer::singleShot(200, this, [this]() {
         m_overlay->show();
     });
@@ -101,15 +104,13 @@ void MainWindow::handleCapture(const QPixmap &pixmap)
         return;
     }
     
-    // 这里可以添加后续处理逻辑
-    // 例如：保存到剪贴板、显示编辑界面等
     QApplication::clipboard()->setPixmap(pixmap);
-    
-    // 显示主窗口
+    m_captureManager->clearResources();
     show();
 }
 
 void MainWindow::onCaptureFinished()
 {
+    m_captureManager->clearResources();
     show();
 }

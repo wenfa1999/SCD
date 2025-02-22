@@ -86,9 +86,13 @@ QToolButton* EditBar::createToolButton(const QString &iconPath,
     if (tool != None) {
         btn->setCheckable(true);
         connect(btn, &QToolButton::clicked, this, [this, tool, btn]() {
-            if (m_currentTool != tool) {
+            // 如果当前工具已经被选中，则取消选中
+            if (m_currentTool == tool) {
+                m_currentTool = None;
+                btn->setChecked(false);
+                emit toolChanged(None);
+            } else {
                 m_currentTool = tool;
-                
                 // 取消其他按钮的选中状态
                 for (auto child : children()) {
                     if (auto toolBtn = qobject_cast<QToolButton*>(child)) {
@@ -97,7 +101,6 @@ QToolButton* EditBar::createToolButton(const QString &iconPath,
                         }
                     }
                 }
-                
                 emit toolChanged(tool);
             }
         });
@@ -116,4 +119,18 @@ void EditBar::show()
         }
     }
     QWidget::show();
+}
+
+void EditBar::resetTool()
+{
+    if (m_currentTool != None) {  // 只有在工具被选中时才发送信号
+        m_currentTool = None;
+        // 取消所有工具按钮的选中状态
+        for (auto child : children()) {
+            if (auto toolBtn = qobject_cast<QToolButton*>(child)) {
+                toolBtn->setChecked(false);
+            }
+        }
+        emit toolChanged(None);
+    }
 } 
