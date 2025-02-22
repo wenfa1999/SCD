@@ -13,9 +13,15 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
 set(PROJECT_SOURCES
-        main.cpp
-        mainwindow.cpp
-        mainwindow.h
+        src/main.cpp
+        src/app/mainwindow.cpp
+        src/app/mainwindow.h
+        src/core/capture/capturemanager.cpp
+        src/core/capture/capturemanager.h
+        src/ui/overlay/overlaywidget.cpp
+        src/ui/overlay/overlaywidget.h
+        src/utils/screenutils.cpp
+        src/utils/screenutils.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
