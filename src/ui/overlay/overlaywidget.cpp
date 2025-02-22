@@ -202,7 +202,8 @@ void OverlayWidget::show()
         m_isDragging = false;
         m_editBar->hide();
         m_sizeLabel->hide();
-        m_startPos = m_endPos = QPoint();
+        m_startPos = QPoint(-1, -1);  // 使用无效点作为初始值
+        m_endPos = QPoint(-1, -1);    // 使用无效点作为初始值
         
         // 显示窗口
         QWidget::show();
@@ -228,7 +229,7 @@ void OverlayWidget::paintEvent(QPaintEvent *event)
     
     // 绘制选区外的半透明遮罩
     QRect selectedRect = QRect(m_startPos, m_endPos).normalized();
-    if (selectedRect.isValid()) {
+    if (selectedRect.isValid() && selectedRect.width() > 0 && selectedRect.height() > 0) {
         // 绘制四个遮罩区域
         painter.fillRect(QRect(0, 0, width(), selectedRect.top()), QColor(0, 0, 0, 128));  // 上
         painter.fillRect(QRect(0, selectedRect.bottom() + 1, width(), height() - selectedRect.bottom() - 1), QColor(0, 0, 0, 128));  // 下
@@ -249,11 +250,12 @@ void OverlayWidget::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         QRect currentRect = QRect(m_startPos, m_endPos).normalized();
         
-        if (currentRect.isValid() && currentRect.contains(event->pos())) {
+        if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
+            && currentRect.contains(event->pos())) {
             // 在选区内点击，开始拖动
             m_isDragging = true;
             m_dragStartPos = event->pos();
-            setCursor(Qt::ClosedHandCursor);  // 设置拖动光标
+            setCursor(Qt::ClosedHandCursor);
         } else {
             // 在选区外点击，开始新选区
             m_isDrawing = true;
@@ -273,9 +275,14 @@ void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
         updateSizeInfo();
         update();
     } else if (m_isDragging) {
+        // 检查选区是否已经占满整个屏幕
+        QRect currentRect = QRect(m_startPos, m_endPos).normalized();
+        if (currentRect.size() == size()) {
+            return;  // 如果选区等于屏幕大小，直接返回不处理拖动
+        }
+
         // 正在拖动选区
         QPoint delta = event->pos() - m_dragStartPos;
-        QRect currentRect = QRect(m_startPos, m_endPos).normalized();
         QRect newRect = currentRect.translated(delta);
         
         // 优化边界检查逻辑
@@ -300,13 +307,7 @@ void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
         // 应用移动
         m_startPos = m_startPos + delta;
         m_endPos = m_endPos + delta;
-        
-        // 如果碰到边界，更新拖动起始点以避免卡顿
-        if (!canMove) {
-            m_dragStartPos = event->pos();
-        } else {
-            m_dragStartPos = event->pos();
-        }
+        m_dragStartPos = event->pos();
         
         updateSizeInfo();
         updateEditBarPosition();
@@ -314,8 +315,14 @@ void OverlayWidget::mouseMoveEvent(QMouseEvent *event)
     } else {
         // 更新鼠标样式
         QRect currentRect = QRect(m_startPos, m_endPos).normalized();
-        if (currentRect.isValid() && currentRect.contains(event->pos())) {
-            setCursor(Qt::OpenHandCursor);
+        if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
+            && currentRect.contains(event->pos())) {
+            // 如果选区等于屏幕大小，不显示手形光标
+            if (currentRect.size() == size()) {
+                updateCursor(event->pos());
+            } else {
+                setCursor(Qt::OpenHandCursor);
+            }
         } else {
             updateCursor(event->pos());
         }
@@ -410,10 +417,11 @@ void OverlayWidget::updateCursor(const QPoint &pos)
         }
     }
     
-    // 检查是否在选区内
+    // 检查是否在选区内 - 添加有效性检查
     QRect currentRect = QRect(m_startPos, m_endPos).normalized();
-    if (currentRect.contains(pos)) {
-        setCursor(Qt::OpenHandCursor);  // 在选区内显示手形光标
+    if (currentRect.isValid() && currentRect.width() > 0 && currentRect.height() > 0 
+        && currentRect.contains(pos)) {
+        setCursor(Qt::OpenHandCursor);
         return;
     }
     
