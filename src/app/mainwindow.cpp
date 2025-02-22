@@ -6,6 +6,8 @@
 #include <QLabel>
 #include <QScreen>
 #include <QWindow>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <Windows.h> // Windows平台
 
 // 初始化静态成员
@@ -20,11 +22,21 @@ MainWindow::MainWindow(QWidget *parent)
     // 添加这行，设置一个合适的初始大小
     resize(800, 600);
     
-    // 添加一个标签显示使用说明
-    QLabel *label = new QLabel(this);
-    label->setText("按 Ctrl+Alt+A 开始截图");
+    // 创建一个中央部件
+    QWidget *centralWidget = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(centralWidget);
+    
+    // 添加说明标签
+    QLabel *label = new QLabel("按 Ctrl+Alt+A 开始截图", this);
     label->setAlignment(Qt::AlignCenter);
-    setCentralWidget(label);
+    layout->addWidget(label);
+    
+    // 添加测试按钮
+    QPushButton *captureButton = new QPushButton("开始截图", this);
+    connect(captureButton, &QPushButton::clicked, this, &MainWindow::startCapture);
+    layout->addWidget(captureButton);
+    
+    setCentralWidget(centralWidget);
     
     setupHotkeys();
     

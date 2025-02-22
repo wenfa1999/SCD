@@ -22,12 +22,20 @@ set(PROJECT_SOURCES
         src/ui/overlay/overlaywidget.h
         src/utils/screenutils.cpp
         src/utils/screenutils.h
+        src/ui/toolbar/editbar.cpp
+        src/ui/toolbar/editbar.h
 )
+
+# 暂时注释掉资源文件
+#set(PROJECT_RESOURCES
+#        resources.qrc
+#)
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(SCD
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        #${PROJECT_RESOURCES}  # 注释掉这行
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET SCD APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -43,6 +51,7 @@ else()
     else()
         add_executable(SCD
             ${PROJECT_SOURCES}
+            #${PROJECT_RESOURCES}  # 注释掉这行
         )
     endif()
 endif()

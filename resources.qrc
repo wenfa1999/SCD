@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="icons">
+        <file>icons/rectangle.svg</file>
+        <file>icons/arrow.svg</file>
+        <file>icons/text.svg</file>
+        <file>icons/confirm.svg</file>
+        <file>icons/cancel.svg</file>
+    </qresource>
+</RCC> 
