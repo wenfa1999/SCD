@@ -4,6 +4,7 @@
 #include <QGuiApplication>
 #include <QDebug>
 #include <QKeyEvent>
+#include <QTimer>
 
 OverlayWidget::OverlayWidget(QWidget *parent)
     : QWidget(parent)
@@ -13,9 +14,16 @@ OverlayWidget::OverlayWidget(QWidget *parent)
     // 添加调试输出
     qDebug() << "OverlayWidget created";
     
-    // 设置窗口标志
-    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    // 修改窗口标志
+    setWindowFlags(Qt::FramelessWindowHint | 
+                  Qt::WindowStaysOnTopHint | 
+                  Qt::Tool |
+                  Qt::NoDropShadowWindowHint);  // 添加这个标志
     setAttribute(Qt::WA_TranslucentBackground);
+    setAttribute(Qt::WA_DeleteOnClose, false);
+    setAttribute(Qt::WA_ShowWithoutActivating, false);  // 确保窗口可以被激活
+    setAttribute(Qt::WA_X11DoNotAcceptFocus, false);   // 确保窗口可以接受焦点
+    setFocusPolicy(Qt::StrongFocus);                   // 设置强焦点策略
     
     // 获取所有屏幕的总区域
     QRect screenRect;
@@ -46,22 +54,39 @@ void OverlayWidget::updateSizeInfo()
     
     QRect rect = QRect(m_startPos, m_endPos).normalized();
     m_sizeLabel->setText(QString("%1 × %2").arg(rect.width()).arg(rect.height()));
+    m_sizeLabel->adjustSize(); // 确保标签大小正确
     
     // 智能调整标签位置，避免超出屏幕
     QPoint labelPos;
     const int MARGIN = 5;
     
-    // 优先显示在选区下方
-    labelPos = QPoint(rect.left(), rect.bottom() + MARGIN);
+    // 计算各个方向的可用空间
+    int spaceAbove = rect.top();
+    int spaceBelow = this->height() - rect.bottom();
+    int spaceLeft = rect.left();
+    int spaceRight = this->width() - rect.right();
     
-    // 如果标签超出屏幕底部，则显示在选区上方
-    if (labelPos.y() + m_sizeLabel->height() > this->height()) {
+    // 优先选择空间最大的位置
+    if (spaceBelow >= m_sizeLabel->height() + MARGIN) {
+        // 下方空间足够
+        labelPos.setY(rect.bottom() + MARGIN);
+    } else if (spaceAbove >= m_sizeLabel->height() + MARGIN) {
+        // 上方空间足够
         labelPos.setY(rect.top() - m_sizeLabel->height() - MARGIN);
+    } else {
+        // 上下都不够，显示在选区内部底部
+        labelPos.setY(rect.bottom() - m_sizeLabel->height() - MARGIN);
     }
     
-    // 如果标签超出屏幕右边，则向左偏移
-    if (labelPos.x() + m_sizeLabel->width() > this->width()) {
-        labelPos.setX(this->width() - m_sizeLabel->width() - MARGIN);
+    if (spaceRight >= m_sizeLabel->width() + MARGIN) {
+        // 右边空间足够
+        labelPos.setX(rect.left());
+    } else if (spaceLeft >= m_sizeLabel->width() + MARGIN) {
+        // 左边空间足够
+        labelPos.setX(rect.right() - m_sizeLabel->width());
+    } else {
+        // 左右都不够，显示在选区内部右侧
+        labelPos.setX(rect.right() - m_sizeLabel->width() - MARGIN);
     }
     
     m_sizeLabel->move(labelPos);
@@ -133,7 +158,22 @@ void OverlayWidget::keyPressEvent(QKeyEvent *event)
         } else {
             // 如果没有在绘制，则退出截图
             hide();
-            emit captureFinished(); // 新增信号
+            emit captureFinished();
         }
+        event->accept();
     }
+}
+
+void OverlayWidget::show()
+{
+    QWidget::show();
+    setWindowState(Qt::WindowActive);
+    raise();
+    activateWindow();
+    
+    // 短暂延迟后设置焦点
+    QTimer::singleShot(100, this, [this]() {
+        setFocus(Qt::ActiveWindowFocusReason);
+        activateWindow();
+    });
 } 

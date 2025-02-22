@@ -4,7 +4,13 @@
 #include <QApplication>
 #include <QTimer>
 #include <QLabel>
-#include <QHotkey>
+#include <QScreen>
+#include <QWindow>
+#include <Windows.h> // Windows平台
+
+// 初始化静态成员
+HHOOK MainWindow::keyboardHook = nullptr;
+MainWindow* MainWindow::instance = nullptr;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -36,14 +42,34 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    // 使用QScopedPointer不需要手动删除
+    if (keyboardHook) {
+        UnhookWindowsHookEx(keyboardHook);
+    }
 }
 
 void MainWindow::setupHotkeys()
 {
-    // 使用QHotkey替代QShortcut实现全局快捷键
-    QHotkey *hotkey = new QHotkey(QKeySequence("Ctrl+Alt+A"), true, this);
-    connect(hotkey, &QHotkey::activated, this, &MainWindow::startCapture);
+    instance = this;
+    keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, 
+                                   GetModuleHandle(nullptr), 0);
+}
+
+LRESULT CALLBACK MainWindow::KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode >= 0 && wParam == WM_KEYDOWN) {
+        KBDLLHOOKSTRUCT* kbStruct = (KBDLLHOOKSTRUCT*)lParam;
+        bool ctrlPressed = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+        bool altPressed = GetAsyncKeyState(VK_MENU) & 0x8000;
+        
+        if (ctrlPressed && altPressed && kbStruct->vkCode == 'A') {
+            if (instance) {
+                QMetaObject::invokeMethod(instance, "startCapture", 
+                                        Qt::QueuedConnection);
+                return 1;
+            }
+        }
+    }
+    return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
 }
 
 void MainWindow::startCapture()

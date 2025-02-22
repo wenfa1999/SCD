@@ -5,6 +5,7 @@
 #include <QScopedPointer>
 #include <QTimer>
 #include <QClipboard>
+#include <Windows.h>
 #include "../core/capture/capturemanager.h"
 #include "../ui/overlay/overlaywidget.h"
 
@@ -26,6 +27,11 @@ private:
     QScopedPointer<CaptureManager> m_captureManager;
     QScopedPointer<OverlayWidget> m_overlay;
     void setupHotkeys();
+
+    // 全局快捷键相关
+    static HHOOK keyboardHook;
+    static MainWindow* instance;
+    static LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 };
 
 #endif // MAINWINDOW_H 

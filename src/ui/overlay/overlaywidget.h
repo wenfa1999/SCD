@@ -7,12 +7,14 @@
 #include <QImage>
 #include <QPixmap>
 #include <QLabel>
+#include <QTimer>
 
 class OverlayWidget : public QWidget
 {
     Q_OBJECT
 public:
     explicit OverlayWidget(QWidget *parent = nullptr);
+    void show(); // 添加 show 函数声明
     
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -40,6 +42,7 @@ private:
     
 signals:
     void areaSelected(const QRect &rect);
+    void captureFinished();  // 添加新信号
 };
 
 #endif // OVERLAYWIDGET_H 
