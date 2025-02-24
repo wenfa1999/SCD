@@ -18,6 +18,8 @@ public:
     ~OverlayWidget();
     void show();
     void hide();
+    QPoint getStartPos() const { return m_startPos; }
+    QPoint getEndPos() const { return m_endPos; }
     
 protected:
     void paintEvent(QPaintEvent *event) override;

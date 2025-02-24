@@ -4,6 +4,7 @@
 #include <QWindow>
 #include <QDebug>
 #include <QPainter>
+#include <cmath>
 
 CaptureManager::CaptureManager(QObject *parent)
     : QObject(parent)
@@ -99,9 +100,40 @@ void CaptureManager::drawAnnotation(QPainter& painter, const Annotation& annotat
             painter.drawRect(annotation.rect);
             break;
             
-        case AnnotationType::Arrow:
-            // 箭头实现将在后续添加
+        case AnnotationType::Arrow: {
+            QLineF line(annotation.startPoint, annotation.endPoint);
+            
+            // 箭头参数
+            double arrowLength = 20.0;
+            double arrowWidth = 8.0;  // 箭头宽度的一半
+            
+            // 计算箭头方向向量并归一化
+            QPointF direction = line.p2() - line.p1();
+            double length = std::sqrt(direction.x() * direction.x() + direction.y() * direction.y());
+            if (length < 1e-6) return;  // 避免除以零
+            direction /= length;
+            
+            // 计算垂直向量
+            QPointF normal(-direction.y(), direction.x());
+            
+            // 计算箭头底部中心点（从箭头尖端往回移动）
+            QPointF arrowBase = line.p2() - direction * arrowLength;
+            
+            // 计算箭头的三个点
+            QPointF arrowTip = line.p2();  // 箭头尖端
+            QPointF arrowLeft = arrowBase + normal * arrowWidth;
+            QPointF arrowRight = arrowBase - normal * arrowWidth;
+            
+            // 绘制箭头主体（从起点到箭头底部中心）
+            painter.drawLine(line.p1(), arrowBase);
+            
+            // 绘制箭头头部
+            QPolygonF arrowHead;
+            arrowHead << arrowTip << arrowLeft << arrowRight;
+            painter.setBrush(annotation.color);
+            painter.drawPolygon(arrowHead);
             break;
+        }
             
         case AnnotationType::Text:
             if (!annotation.text.isEmpty()) {

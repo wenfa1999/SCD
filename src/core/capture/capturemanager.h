@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QtMath>  // 添加数学函数支持
 
 class CaptureManager : public QObject
 {
@@ -29,6 +30,8 @@ public:
         QColor color;         // 标注颜色
         int thickness;        // 线条粗细
         bool filled;          // 是否填充（用于矩形）
+        QPoint startPoint;    // 添加：箭头起点
+        QPoint endPoint;      // 添加：箭头终点
     };
 
 public:

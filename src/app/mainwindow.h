@@ -28,6 +28,7 @@ private slots:
     void handleCapture(const QPixmap &pixmap);
     void onCaptureFinished();
     void createFloatWindow(const QPixmap& pixmap);
+    void closeApplication();
 
 private:
     // 使用智能指针管理资源
@@ -48,6 +49,7 @@ private:
     void handleTrayActivated(QSystemTrayIcon::ActivationReason reason);
 
     QList<FloatWindow*> m_floatWindows;  // 管理所有贴图窗口
+    bool m_isClosing{false};  // 添加标志位
 };
 
 #endif // MAINWINDOW_H 

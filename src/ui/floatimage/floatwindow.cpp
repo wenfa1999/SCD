@@ -84,4 +84,12 @@ void FloatWindow::saveImage()
     if (!filePath.isEmpty()) {
         m_pixmap.save(filePath);
     }
+}
+
+void FloatWindow::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton) {
+        // 双击左键关闭窗口
+        close();
+    }
 } 

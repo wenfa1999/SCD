@@ -154,7 +154,7 @@ void MainWindow::createTrayMenu()
     connect(showAction, &QAction::triggered, this, &MainWindow::show);
     
     QAction* quitAction = new QAction("退出", this);
-    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+    connect(quitAction, &QAction::triggered, this, &MainWindow::closeApplication);
     
     m_trayMenu->addAction(captureAction);
     m_trayMenu->addAction(showAction);
@@ -171,9 +171,11 @@ void MainWindow::handleTrayActivated(QSystemTrayIcon::ActivationReason reason)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    if (m_trayIcon->isVisible()) {
+    if (!m_isClosing && m_trayIcon && m_trayIcon->isVisible()) {
         hide();
         event->ignore();
+    } else {
+        event->accept();
     }
 }
 
@@ -190,5 +192,58 @@ void MainWindow::createFloatWindow(const QPixmap& pixmap)
     });
     
     m_floatWindows.append(floatWin);
+    
+    // 获取当前选区的位置
+    QRect selectedRect = QRect(m_overlay->getStartPos(), m_overlay->getEndPos()).normalized();
+    
+    // 设置贴图窗口的位置为选区位置
+    floatWin->move(selectedRect.topLeft());
+    
     floatWin->show();
+}
+
+void MainWindow::closeApplication()
+{
+    m_isClosing = true;  // 设置关闭标志
+    
+    // 先禁用所有事件处理
+    setEnabled(false);
+    
+    // 断开所有信号连接
+    disconnect();
+    
+    // 清理全局钩子
+    if (keyboardHook) {
+        UnhookWindowsHookEx(keyboardHook);
+        keyboardHook = nullptr;
+    }
+
+    // 断开所有贴图窗口的信号连接并隐藏
+    for (auto* window : m_floatWindows) {
+        window->disconnect();
+        window->hide();
+    }
+
+    // 隐藏托盘图标并断开连接
+    if (m_trayIcon) {
+        m_trayIcon->disconnect();
+        m_trayIcon->hide();
+    }
+
+    // 隐藏主窗口
+    hide();
+
+    // 使用延迟调用进行清理和退出
+    QTimer::singleShot(0, this, [this]() {
+        // 清理贴图窗口
+        qDeleteAll(m_floatWindows);
+        m_floatWindows.clear();
+
+        // 清理托盘图标
+        delete m_trayIcon;
+        m_trayIcon = nullptr;
+
+        // 退出应用
+        qApp->quit();
+    });
 }

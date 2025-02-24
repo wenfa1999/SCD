@@ -283,11 +283,14 @@ void OverlayWidget::paintEvent(QPaintEvent *event)
 
     // 绘制正在创建的标注预览
     if (m_isAnnotating) {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        
         QPen pen(m_currentColor);
         pen.setWidth(m_currentThickness);
         painter.setPen(pen);
-        
-        QRect annotationRect = QRect(m_annotationStart, m_annotationEnd).normalized();
+
+        QRect annotationRect(m_annotationStart, m_annotationEnd);
         
         switch (m_currentTool) {
             case CaptureManager::AnnotationType::Rectangle:
@@ -301,7 +304,44 @@ void OverlayWidget::paintEvent(QPaintEvent *event)
                 painter.drawRect(annotationRect);
                 break;
                 
-            // 其他工具类型将在后续添加
+            case CaptureManager::AnnotationType::Arrow: {
+                QLineF line(m_annotationStart, m_annotationEnd);
+                
+                // 箭头参数
+                double arrowLength = 20.0;
+                double arrowWidth = 8.0;  // 箭头宽度的一半
+                
+                // 计算箭头方向向量并归一化
+                QPointF direction = line.p2() - line.p1();
+                double length = std::sqrt(direction.x() * direction.x() + direction.y() * direction.y());
+                if (length < 1e-6) return;  // 避免除以零
+                direction /= length;
+                
+                // 计算垂直向量
+                QPointF normal(-direction.y(), direction.x());
+                
+                // 计算箭头底部中心点（从箭头尖端往回移动）
+                QPointF arrowBase = line.p2() - direction * arrowLength;
+                
+                // 计算箭头的三个点
+                QPointF arrowTip = line.p2();  // 箭头尖端
+                QPointF arrowLeft = arrowBase + normal * arrowWidth;
+                QPointF arrowRight = arrowBase - normal * arrowWidth;
+                
+                // 绘制箭头主体（从起点到箭头底部中心）
+                painter.drawLine(line.p1(), arrowBase);
+                
+                // 绘制箭头头部
+                QPolygonF arrowHead;
+                arrowHead << arrowTip << arrowLeft << arrowRight;
+                painter.setBrush(m_currentColor);
+                painter.drawPolygon(arrowHead);
+                break;
+            }
+                
+            case CaptureManager::AnnotationType::Text:
+                // ... 现有的文字预览代码 ...
+                break;
         }
     }
 }
@@ -498,7 +538,9 @@ void OverlayWidget::handleToolChanged(EditBar::Tool tool)
                 currentRect.isValid()) {
                 QPixmap screenshot = m_captureManager->captureScreen();
                 QPixmap croppedShot = screenshot.copy(currentRect);
-                emit createFloatWindow(croppedShot);  // 发送信号
+                emit createFloatWindow(croppedShot);
+                hide();  // 添加这行：贴图后自动隐藏截图界面
+                emit captureFinished();  // 发送截图完成信号
             }
             break;
         default:
@@ -584,9 +626,11 @@ void OverlayWidget::finishAnnotation()
                 annotation.color = m_currentColor;
                 annotation.thickness = m_currentThickness;
                 annotation.filled = m_currentFilled;
+                // 保存实际的起点和终点
+                annotation.startPoint = m_annotationStart;
+                annotation.endPoint = m_annotationEnd;
                 
                 m_captureManager->addAnnotation(annotation);
-                // 直接更新背景截图
                 m_screenSnapshot = m_captureManager->getEditedPixmap();
             }
         }
